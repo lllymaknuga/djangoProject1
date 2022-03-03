@@ -1,47 +1,60 @@
-from datetime import timedelta
-
-from django.utils import timezone
+import requests
 
 from rest_framework.serializers import ModelSerializer
 from rest_framework.serializers import ValidationError
-from rest_framework.authtoken.models import Token
 
 from users.models import CustomUser, OtpToken
 
 
 class CustomUserSerializer(ModelSerializer):
     class Meta:
-        fields = ['phone_number', ]
+        fields = ['phone_number']
         model = CustomUser
 
 
 class OtpTokenGenerateSerializer(ModelSerializer):
     class Meta:
-        fields = ['phone_number']
+        fields = ['phone_number', 'check_id', 'call_phone']
+        read_only_fields = ['check_id', 'call_phone']
         model = OtpToken
 
     def validate(self, attrs):
-        if OtpToken.objects.filter(phone_number=attrs['phone_number'], data_send__day=timezone.now().day).count() > 5:
-            raise ValidationError('Число попыток закончилось(')
+        if len(attrs['phone_number']) != 12:
+            raise ValidationError('Введен номер неправильно')
         return attrs
+
+    def create(self, validated_data):
+        phone = validated_data['phone_number']
+
+        url = f'https://sms.ru/callcheck/add?api_id=33A6FC6D-FA74-8486-346B-4727B7EFA8B3&phone={phone[1:]}&json=1'
+        data = requests.post(url).json()
+        check_id = data['check_id']
+        call_phone = data['call_phone']
+        if OtpToken.objects.filter(phone_number=phone).count() == 0:
+            token = OtpToken.objects.create(phone_number=phone, check_id=check_id, call_phone=call_phone)
+        else:
+            token = OtpToken.objects.get(phone_number=phone)
+            token.check_id = check_id
+            token.save()
+        return token
 
 
 class OtpTokenValidateSerializer(ModelSerializer):
     class Meta:
-        fields = ['phone_number', 'otp_code']
+        fields = ['phone_number']
         model = OtpToken
 
     def validate(self, attrs):
         phone = attrs['phone_number']
-        otp_code = attrs['otp_code']
-        if not OtpToken.objects.filter(otp_code=otp_code, phone_number=phone).last():
-            raise ValidationError('Что-то пошло не так. Получите код')
-        if OtpToken.objects.filter(phone_number=phone).last().otp_code != otp_code:
-            OtpToken.objects.filter(phone_number=phone).last().attempts += 1
-            raise ValidationError('Попытки закончились. Получите код заново')
-        if timezone.now() - OtpToken.objects.filter(phone_number=attrs['phone_number']).last().data_send > timedelta(
-                minutes=3):
-            raise ValidationError('Время жизни токена закончилось. Получите код заново')
+        if not OtpToken.objects.filter(phone_number=phone):
+            raise ValidationError('Вы не прошли генерацию')
+        check_id = OtpToken.objects.get(phone_number=phone).check_id
+        url = f'https://sms.ru/callcheck/status?api_id=33A6FC6D-FA74-8486-346B-4727B7EFA8B3&check_id={check_id}&json=1'
+        data = requests.get(url).json()
+        if data['check_status'] == 402:
+            raise ValidationError(data['check_status_text'])
+        if data['check_status'] == 400:
+            raise ValidationError(data['check_status_text'])
         return attrs
 
     def create(self, validated_data):

@@ -33,20 +33,19 @@ class CustomUser(AbstractUser):
 #         return self.category
 
 
-def get_partial_random_otp_code(start, end):
-    return partial(randint, start, end)
-
-
 class OtpToken(models.Model):
     phone_number = models.CharField(max_length=13, verbose_name='Номер телефона')
     data_send = models.DateTimeField(_('date joined'), default=timezone.now)
-    otp_code = models.IntegerField(default=get_partial_random_otp_code(1000, 10000))
-    attempts = models.IntegerField(default=0)
-    is_active = models.BooleanField(default=True)
+    check_id = models.CharField(max_length=255, blank=True)
+    call_phone = models.CharField(max_length=13, blank=False, null=True)
+
+    def __str__(self):
+        return self.phone_number
 
 
 @receiver(post_save, sender=CustomUser)
 def fok(sender, instance, created, **kwargs):
     if created:
-        instance.username = 'Пользователь' + str(instance.id)
-        instance.save()
+        if not instance.is_staff:
+            instance.username = 'Пользователь' + str(instance.id)
+            instance.save()
