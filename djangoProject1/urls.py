@@ -1,4 +1,3 @@
-
 """djangoProject1 URL Configuration
 
 The `urlpatterns` list routes URLs to views. For more information please see:
@@ -17,7 +16,12 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
+from chat.views import MessageApiList, CityCreate
+
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('user/', include('users.urls'))
+    path('user/', include('users.urls')),
+    path('message/', MessageApiList.as_view()),
+    path('city/', CityCreate.as_view()),
+    path('chat/', include('chat.urls')),
 ]
