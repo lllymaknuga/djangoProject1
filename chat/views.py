@@ -22,21 +22,18 @@ class MessageApiList(ListAPIView):
 
     def get_queryset(self):
         city = self.request.GET['city']
-        print()
         queryset = self.queryset.filter(city_id__name=city)
-        print(self.queryset)
-        print(1)
-        print(queryset)
-        print(queryset[0:1])
         try:
             id_message = int(self.request.GET['message'])
         except KeyError:
             id_message = queryset.count()
+        print(id_message)
         if 9 >= id_message:
             return queryset[0:id_message]
         if queryset.count() == 0:
             return []
         lst = queryset[id_message - 10:id_message]
+        print(lst)
         return lst
 
     def list(self, request, *args, **kwargs):
@@ -44,12 +41,15 @@ class MessageApiList(ListAPIView):
         try:
             id_message = int(self.request.GET['message'])
         except KeyError:
-            id_message = len(queryset)
+            id_message = len(self.queryset.all())
         serializer = self.get_serializer(queryset, many=True)
+        if not serializer.data:
+            return Response({'messages': serializer.data, 'id_message': -1})
         if 9 >= id_message:
             return Response({'messages': serializer.data, 'id_message': -1})
         if id_message == 0:
             return Response({'messages': serializer.data, 'id_message': -1})
+        print(id_message)
         return Response({'messages': serializer.data, 'id_message': id_message - 10})
 
 

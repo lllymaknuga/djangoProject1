@@ -1,9 +1,6 @@
 from rest_framework import status
 from rest_framework.generics import CreateAPIView, ListAPIView, UpdateAPIView, DestroyAPIView
-from rest_framework import viewsets
 from rest_framework.authtoken.models import Token
-from rest_framework.mixins import UpdateModelMixin
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from users.models import CustomUser
@@ -34,11 +31,23 @@ class PhonNumberOtpCodeValidate(CreateAPIView):
     def post(self, request, *args, **kwargs):
         print(request.data)
         serializer = self.serializer_class(data=request.data, context={'request': request})
-        if serializer.is_valid(raise_exception=True):
-            user = serializer.save()
-            print(user)
-            token, created = Token.objects.get_or_create(user=user)
-            return Response({'token': token.key, 'username': user.username}, status=status.HTTP_201_CREATED)
+        try:
+            if serializer.is_valid(raise_exception=True):
+                user = CustomUser.objects.get(phone_number=request.data['phone_number'])
+                user.is_active = True
+                user.save()
+                token, created = Token.objects.get_or_create(user=user)
+                print(created)
+                return Response({'token': token.key, 'username': user.username, 'user-id': user.id},
+                                status=status.HTTP_201_CREATED)
+        except:
+            if serializer.is_valid(raise_exception=True):
+                user = serializer.save()
+                print(user)
+                token, created = Token.objects.get_or_create(user=user)
+                print(created)
+                return Response({'token': token.key, 'username': user.username, 'user-id': user.id},
+                                status=status.HTTP_201_CREATED)
 
 
 class UpdateUsername(UpdateAPIView):
@@ -58,14 +67,16 @@ class UpdateUsername(UpdateAPIView):
             return Response('Ошибка', status=status.HTTP_400_BAD_REQUEST)
 
 
-class DeleteUser(DestroyAPIView):
+class DeleteUser(UpdateAPIView):
     serializer_class = CustomUserSerializer
 
-    def delete(self, request, *args, **kwargs):
-        user = Token.objects.get(key=request.headers['Authorization'].split(' ')[1]).user
-        print(user)
+    def update(self, request, *args, **kwargs):
+        token = Token.objects.get(key=request.headers['Authorization'].split(' ')[1])
+        user = token.user
+        token.delete()
         try:
-            user.delete()
+            user.is_active = False
+            user.save()
             return Response('Успешно удалено', status=status.HTTP_204_NO_CONTENT)
         except:
             return Response('Ошибка', status=status.HTTP_400_BAD_REQUEST)
